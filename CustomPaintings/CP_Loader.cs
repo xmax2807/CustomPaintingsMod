@@ -84,7 +84,7 @@ namespace CustomPaintings
                 return;
             }
 
-            string[] validExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".mp4" };
+            string[] validExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".mp4", ".gif" };
 
             var files = Directory
                 .EnumerateFiles(directoryPath, "*.*", SearchOption.AllDirectories)
@@ -101,7 +101,14 @@ namespace CustomPaintings
                 string filePath = files[i];
                 string fileExtension = Path.GetExtension(filePath).ToLower();
 
-                if (ffileExtension == ".mp4")
+                if (fileExtension == ".gif")
+                {
+                    logger.LogWarning($"Failed to load gif {filePath}. please convert it to .mp4. there is a converter on the mod's github");
+                    continue;   //dont do anything with the file
+
+                }
+
+                if (fileExtension == ".mp4")
                 {                     
                     continue;                    
 

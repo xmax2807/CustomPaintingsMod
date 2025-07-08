@@ -96,6 +96,9 @@ namespace CustomPaintings
                 Seed = ReceivedSeed;
             }
 
+            var rng = new System.Random(Seed);
+
+
             if (CP_Config.ChaosMode.Value == true && CP_Config.HostControl.Value == false && currentState != ModState.SinglePlayer|| ChaosState == true && CP_Config.HostControl.Value == true && currentState != ModState.SinglePlayer|| CP_Config.ChaosMode.Value == true && currentState == ModState.SinglePlayer)
             {
                 ImageMode = "Chaos";
@@ -152,12 +155,13 @@ namespace CustomPaintings
 
                                     if (loader.LoadedMaterials.Count > 0)
                                     {
+                                        int number = rng.Next(0, int.MaxValue);
 
                                         // Use the seed to pick the image based on the index
-                                        int index = Mathf.Abs((Seed + paintingsChangedCount) % loader.LoadedMaterials.Count);
+                                        int index = Mathf.Abs(number % loader.LoadedMaterials.Count);
                                         materials[i] = loader.LoadedMaterials[index];
                                         paintingsChangedCount++;  // Increment the count of paintings changed                               
-
+                                        logger.LogToFileOnly("DEBUG", $"painting used random number | {number, -13} | to change any painting");
 
                                     }
                                 }
@@ -195,27 +199,29 @@ namespace CustomPaintings
                                         continue; // Skip this material
                                     }
 
-                                    
-
+                                    int number = rng.Next(0, int.MaxValue);
 
                                     if (groupNames.Contains("Landscape"))
                                     {
-                                        int index = Mathf.Abs((Seed + LandscapeChangedCount) % loader.MaterialGroups["Landscape"].Count);
+                                        int index = Mathf.Abs(number % loader.MaterialGroups["Landscape"].Count);
                                         materials[i] = loader.MaterialGroups["Landscape"][index];
                                         LandscapeChangedCount++;  // Increment the count of paintings changed 
+                                        logger.LogToFileOnly("DEBUG", $"painting used random number | {number,-13} | to change landscape painting");
 
                                     }
                                     else if (groupNames.Contains("Square"))
                                     {
-                                        int index = Mathf.Abs((Seed + SquareChangedCount) % loader.MaterialGroups["Square"].Count);
+                                        int index = Mathf.Abs(number % loader.MaterialGroups["Square"].Count);
                                         materials[i] = loader.MaterialGroups["Square"][index];
                                         SquareChangedCount++;  // Increment the count of paintings changed 
+                                        logger.LogToFileOnly("DEBUG", $"painting used random number | {number,-13} | to change square painting");
                                     }
                                     else if (groupNames.Contains("Portrait"))
                                     {
-                                        int index = Mathf.Abs((Seed + PortraitChangedCount) % loader.MaterialGroups["Portrait"].Count);
+                                        int index = Mathf.Abs(number % loader.MaterialGroups["Portrait"].Count);
                                         materials[i] = loader.MaterialGroups["Portrait"][index];
                                         PortraitChangedCount++;  // Increment the count of paintings changed 
+                                        logger.LogToFileOnly("DEBUG", $"painting used random number | {number,-13} | to change portrait painting");
                                     }
 
                                 }
