@@ -22,12 +22,13 @@ namespace CustomPaintings
         private static CP_Synchroniser sync;
         private static CP_GroupList grouper;
         private static CP_Config configfile;
-        private static CP_GifVidManager GifManager;
+        private static CP_GifVidManager GifVidManager;
+        private static CustomPaintings CP_Main;
 
         public static int? receivedSeed = null;
         public static int? oldreceivedSeed = null;
         public static readonly int maxWaitTimeMs = 1000; // Max wait time for seed
-        
+        private bool PreviousHostControlValue = false;
 
         private readonly Harmony harmony = new Harmony("UnderratedJunk.CustomPaintings");
 
@@ -39,14 +40,14 @@ namespace CustomPaintings
             logger = new CP_Logger("CustomPaintings");
             logger.LogInfo("CustomPaintings mod initialized.");
 
-            // Initialize GifManager
-            GifManager = new CP_GifVidManager(logger);
+            // Initialize GifVidManager
+            GifVidManager = new CP_GifVidManager(logger);
 
             // Initialize configurable settings
             CP_Config.Init(Config);
 
             // Initialize Loader second
-            loader = new CP_Loader(logger, GifManager);
+            loader = new CP_Loader(logger, GifVidManager);
             loader.LoadImagesFromAllPlugins();
 
             // Initialize grouper , pass logger as dependency
@@ -59,8 +60,8 @@ namespace CustomPaintings
             swapper = new CP_Swapper(logger, loader, grouper);
 
             // Initialize syncer
-            sync = new CP_Synchroniser(logger);
-
+            sync = new CP_Synchroniser(logger, swapper);
+                        
             harmony.PatchAll();
         }
 
@@ -70,6 +71,32 @@ namespace CustomPaintings
             {
                 swapper.ReplacePaintings();
             }
+            if (Input.GetKeyDown(configfile.SyncRequestKey))
+            {
+                sync.SyncRequest();
+            }
+            if (!PreviousHostControlValue && CP_Config.HostControl.Value && swapper.GetModState() == CP_Swapper.ModState.Client)
+            {
+                sync.SyncRequest();
+
+                Task.Run(async () =>
+                {
+                    int waited = 0;
+                    int interval = 50;
+
+                    // wait to receive a code
+                    while (swapper.SyncedToHost == false && waited < maxWaitTimeMs)
+                    {
+                        await Task.Delay(interval);
+                        waited += interval;
+                    }
+                    if (swapper.SyncedToHost == false)
+                        logger.LogError("failed to sync to the host");
+                });
+            }
+            PreviousHostControlValue = CP_Config.HostControl.Value;
+
+
         }
 
         // Patch method for replacing the paintings
@@ -120,16 +147,13 @@ namespace CustomPaintings
 
                 if (swapper.GetModState() == CP_Swapper.ModState.Client)
                 {
-
                     PhotonNetwork.AddCallbackTarget(sync); // Subscribe to Photon events
-
                 }
 
 
 
                 if (swapper.GetModState() == CP_Swapper.ModState.Host)
                 {
-
                     HostSeed = UnityEngine.Random.Range(0, int.MaxValue);
                     logger.LogInfo($"Generated Hostseed: {HostSeed}");
                     PhotonNetwork.AddCallbackTarget(sync); // Subscribe to Photon events
@@ -145,7 +169,6 @@ namespace CustomPaintings
                     {
                         sync.SendHostSettings("off", CP_Config.RugsAndBanners.Value, CP_Config.ChaosMode.Value);
                     }
-
                 }
 
                 // Update 
@@ -157,13 +180,34 @@ namespace CustomPaintings
         [HarmonyPatch(typeof(NetworkConnect), "TryJoiningRoom")]
         public class JoinLobbyPatch
         {
+            private static void Postfix()
+            {
+                Task.Run(async () =>
+                {
+                    if (swapper.GetModState() == CP_Swapper.ModState.Client)
+                    {
+                        int waited = 0;
+                        int interval = 50;
+
+                        // wait to receive a code
+                        while (swapper.SyncedToHost == false && waited < maxWaitTimeMs)
+                        {
+                            await Task.Delay(interval);
+                            waited += interval;
+                        }
+                        if (swapper.SyncedToHost == false)
+                            logger.LogError("failed to sync to the host");
+                    }
+                });
+            }
+
             private static void Prefix()
             {
 
                 if (swapper.GetModState() != CP_Swapper.ModState.Host)
                 {
                     swapper.SetState(CP_Swapper.ModState.Client);
-
+                    sync.SyncRequest();
                 }
             }
         }
@@ -175,9 +219,7 @@ namespace CustomPaintings
             private static bool Prefix()
             {
                 swapper.SetState(CP_Swapper.ModState.Host);
-
                 return true; // Continue execution of the original method
-
             }
         }
 
@@ -192,7 +234,9 @@ namespace CustomPaintings
                 PhotonNetwork.RemoveCallbackTarget(sync); // Unsubscribe to Photon events
 
                 swapper.SetState(CP_Swapper.ModState.SinglePlayer);
+                swapper.ResetTempLists();
                 SeperateState = "Singleplayer";
+                swapper.SyncedToHost = false;
             }
         }
     }

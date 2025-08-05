@@ -18,6 +18,7 @@ public class CP_Config
 
 
     public KeyCode ForceSwapKey { get; set;}
+    public KeyCode SyncRequestKey { get; set; }
 
     internal static class Grunge
     {
@@ -38,6 +39,7 @@ public class CP_Config
     public CP_Config()
     {
         ForceSwapKey = (KeyCode) System.Enum.Parse(typeof(KeyCode), PlayerPrefs.GetString("ForceSwapKey", "P"));
+        SyncRequestKey = (KeyCode)System.Enum.Parse(typeof(KeyCode), PlayerPrefs.GetString("SyncRequestKey", "O"));
     }
 
     internal static void Init(ConfigFile config)

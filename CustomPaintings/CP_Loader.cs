@@ -15,7 +15,7 @@ namespace CustomPaintings
         private const string IMAGE_FOLDER_NAME = "CustomPaintings";
 
         private readonly CP_Logger logger;
-        private readonly CP_GifVidManager GifManager;
+        private readonly CP_GifVidManager GifVidManager;
 
         //create a dictionary for the different image groups
         public Dictionary<string, List<Material>> MaterialGroups = new Dictionary<string, List<Material>>();
@@ -33,10 +33,10 @@ namespace CustomPaintings
         private int loadedcount = 1;
 
         // Constructor to initialize the logger
-        public CP_Loader(CP_Logger logger, CP_GifVidManager GifManager)
+        public CP_Loader(CP_Logger logger, CP_GifVidManager GifVidManager)
         {
             this.logger = logger;
-            this.GifManager = GifManager;
+            this.GifVidManager = GifVidManager;
             logger.LogInfo("CP_Loader initialized.");
         }
 
@@ -103,14 +103,14 @@ namespace CustomPaintings
 
                 if (fileExtension == ".gif")
                 {
-                    logger.LogWarning($"Failed to load gif {filePath}. please convert it to .mp4. there is a converter on the mod's github");
+                    logger.LogWarning($"Failed to load gif {filePath}. please convert it to .mp4. there is a converter with instructions on the mod's github");
                     continue;   //dont do anything with the file
 
                 }
 
                 if (fileExtension == ".mp4")
-                {                     
-                    continue;                    
+                {
+                    continue;
 
                 }
                 else

@@ -1,14 +1,15 @@
-﻿using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.SceneManagement;
+﻿using BepInEx.Configuration;
+using ExitGames.Client.Photon;
 using HarmonyLib;
 using Photon.Pun;
-using ExitGames.Client.Photon;
 using Photon.Realtime;
-using UnityEngine.Device;
 using System;
+using System.Collections.Generic;
 using System.Linq;
-using BepInEx.Configuration;
+using System.Threading.Tasks;
+using UnityEngine;
+using UnityEngine.Device;
+using UnityEngine.SceneManagement;
 
 namespace CustomPaintings
 {
@@ -26,6 +27,8 @@ namespace CustomPaintings
         private readonly CP_Loader loader;
         private readonly CP_GroupList grouper;
         private static CP_Config configfile;
+        private static CP_Synchroniser syncer;
+        private static CustomPaintings CP_Main;
 
         //create seed variables      
         public static int HostSeed = 0;        
@@ -37,8 +40,12 @@ namespace CustomPaintings
         public static bool RBState = false;
         public static bool ChaosState = false;
 
+        public static bool PrevHostControlValue = CP_Config.HostControl.Value;
+        public bool SyncedToHost = false;
+
         //create string to check what mode you are in
         public static string ImageMode = "Normal";
+                
 
         //changed counts for all the painting swaps
         private int paintingsChangedCount = 0;  
@@ -49,6 +56,21 @@ namespace CustomPaintings
         // Default to Singleplayer
         private static ModState currentState = ModState.SinglePlayer;
 
+        //create Temporary lists to prevent duplicates
+        public List<Material> ListPaintingsAll;
+        public List<Material> ListPaintingsPortrait;
+        public List<Material> ListPaintingsLandscape;
+        public List<Material> ListPaintingsSquare;
+
+        public List<int> ListUsedPaintingsAll        = new List<int>{};
+        public List<int> ListUsedPaintingsPortrait   = new List<int>{};
+        public List<int> ListUsedPaintingsLandscape  = new List<int>{};
+        public List<int> ListUsedPaintingsSquare     = new List<int>{};
+
+        public List<int> ListUsedPaintingsAllPrevRound;
+        public List<int> ListUsedPaintingsPortraitPrevRound;
+        public List<int> ListUsedPaintingsLandscapePrevRound;
+        public List<int> ListUsedPaintingsSquarePrevRound;
 
         //check the current modstate of the mod
         public ModState GetModState()
@@ -66,12 +88,24 @@ namespace CustomPaintings
 
             // Log the current state on initialization
             logger.LogInfo($"Initial ModState: {currentState}");
+            ResetTempLists();
 
-            
         }
 
+        //reset temp lists
+        public void ResetTempLists()
+        {
+            ListPaintingsAll =           new List<Material>(loader.LoadedMaterials);
+            ListPaintingsPortrait =      new List<Material>(loader.MaterialGroups["Portrait"]);
+            ListPaintingsLandscape =     new List<Material>(loader.MaterialGroups["Landscape"]);
+            ListPaintingsSquare =        new List<Material>(loader.MaterialGroups["Square"]);
+            ListUsedPaintingsAll.Clear();
+            ListUsedPaintingsLandscape.Clear();
+            ListUsedPaintingsSquare.Clear();
+            ListUsedPaintingsPortrait.Clear();
+            logger.LogDebug($"resetting all lists");
+        }
         
-
         // Perform the painting swap operation
         public void ReplacePaintings()
         {
@@ -82,21 +116,20 @@ namespace CustomPaintings
                 logger.LogInfo($"Generated new random singleplayer seed: {Seed}");
             }
 
-
-            if (currentState == ModState.Host)
-            {
-                //use host seed
-                Seed = HostSeed;
-            }
-
-
+            if (currentState == ModState.Host) 
+                Seed = HostSeed;        //use host seed
+            
             if (currentState == ModState.Client)
-            {
-                //use client seed
-                Seed = ReceivedSeed;
-            }
+                Seed = ReceivedSeed;    //use client seed
+                        
+            var rng = new System.Random(Seed);            
 
-            var rng = new System.Random(Seed);
+            //save all used images from last round for late joiners
+            ListUsedPaintingsAllPrevRound        = new List<int>(ListUsedPaintingsAll);
+            ListUsedPaintingsPortraitPrevRound   = new List<int>(ListUsedPaintingsPortrait);
+            ListUsedPaintingsLandscapePrevRound  = new List<int>(ListUsedPaintingsLandscape);
+            ListUsedPaintingsSquarePrevRound     = new List<int>(ListUsedPaintingsSquare);
+
 
 
             if (CP_Config.ChaosMode.Value == true && CP_Config.HostControl.Value == false && currentState != ModState.SinglePlayer|| ChaosState == true && CP_Config.HostControl.Value == true && currentState != ModState.SinglePlayer|| CP_Config.ChaosMode.Value == true && currentState == ModState.SinglePlayer)
@@ -153,24 +186,35 @@ namespace CustomPaintings
                                         continue; // Skip this material
                                     }
 
+
+
+
                                     if (loader.LoadedMaterials.Count > 0)
                                     {
-                                        int number = rng.Next(0, int.MaxValue);
+                                        if (ListPaintingsAll.Count == 0)
+                                        {
+                                            ListPaintingsAll.AddRange(loader.LoadedMaterials);                                            
+                                            ListUsedPaintingsAll.Clear();
+                                        }
 
-                                        // Use the seed to pick the image based on the index
-                                        int index = Mathf.Abs(number % loader.LoadedMaterials.Count);
-                                        materials[i] = loader.LoadedMaterials[index];
+                                        // Use the seed based random number generator to choose the next image based on the remaining ones in the list
+                                        int index = rng.Next(0, ListPaintingsAll.Count);
+                                        
+                                        materials[i] = ListPaintingsAll[index];
                                         paintingsChangedCount++;  // Increment the count of paintings changed                               
-                                        logger.LogToFileOnly("DEBUG", $"painting used random number | {number, -13} | to change any painting");
+                                        logger.LogToFileOnly("DEBUG", $"painting used random index number | {index, -13} | to change a painting");
 
+                                        ListPaintingsAll.RemoveAt(index);
+                                        ListUsedPaintingsAll.Add(index);
                                     }
                                 }
                             }
                         }
 
                         renderer.sharedMaterials = materials;
-                    }
+                    }                    
                 }
+                logger.LogInfo($"Total paintings changed in this scene: {paintingsChangedCount}");
             }
             else if (CP_Config.SeperateImages.Value == true && SeperateState == "Singleplayer" || SeperateState == "on" && CP_Config.HostControl.Value == true || CP_Config.HostControl.Value == false && CP_Config.SeperateImages.Value == true)
             {
@@ -199,29 +243,57 @@ namespace CustomPaintings
                                         continue; // Skip this material
                                     }
 
-                                    int number = rng.Next(0, int.MaxValue);
-
                                     if (groupNames.Contains("Landscape"))
                                     {
-                                        int index = Mathf.Abs(number % loader.MaterialGroups["Landscape"].Count);
-                                        materials[i] = loader.MaterialGroups["Landscape"][index];
+                                        if (ListPaintingsLandscape.Count == 0)
+                                        {
+                                            ListPaintingsLandscape.AddRange(loader.MaterialGroups["Landscape"]);
+                                            ListUsedPaintingsLandscape.Clear();
+                                        }
+
+                                        // Use the seed based random number generator to choose the next image based on the remaining ones in the list
+                                        int index = rng.Next(0, ListPaintingsLandscape.Count);
+                                        materials[i] = ListPaintingsLandscape[index];
                                         LandscapeChangedCount++;  // Increment the count of paintings changed 
-                                        logger.LogToFileOnly("DEBUG", $"painting used random number | {number,-13} | to change landscape painting");
+                                        logger.LogToFileOnly("DEBUG", $"painting used random index number | {index,-13} | to change landscape painting");
+
+                                        ListPaintingsLandscape.RemoveAt(index);
+                                        ListUsedPaintingsLandscape.Add(index);
 
                                     }
                                     else if (groupNames.Contains("Square"))
                                     {
-                                        int index = Mathf.Abs(number % loader.MaterialGroups["Square"].Count);
-                                        materials[i] = loader.MaterialGroups["Square"][index];
+                                        if (ListPaintingsSquare.Count == 0)
+                                        {
+                                            ListPaintingsSquare.AddRange(loader.MaterialGroups["Square"]);
+                                            ListUsedPaintingsSquare.Clear();
+                                        }
+
+                                        // Use the seed based random number generator to choose the next image based on the remaining ones in the list
+                                        int index = rng.Next(0, ListPaintingsSquare.Count);
+                                        materials[i] = ListPaintingsSquare[index];
                                         SquareChangedCount++;  // Increment the count of paintings changed 
-                                        logger.LogToFileOnly("DEBUG", $"painting used random number | {number,-13} | to change square painting");
+                                        logger.LogToFileOnly("DEBUG", $"painting used random index number | {index,-13} | to change square painting");
+
+                                        ListPaintingsSquare.RemoveAt(index);
+                                        ListUsedPaintingsSquare.Add(index);
                                     }
                                     else if (groupNames.Contains("Portrait"))
                                     {
-                                        int index = Mathf.Abs(number % loader.MaterialGroups["Portrait"].Count);
-                                        materials[i] = loader.MaterialGroups["Portrait"][index];
+                                        if (ListPaintingsPortrait.Count == 0)
+                                        {
+                                            ListPaintingsPortrait.AddRange(loader.MaterialGroups["Portrait"]);
+                                            ListUsedPaintingsPortrait.Clear();
+                                        }
+
+                                        // Use the seed based random number generator to choose the next image based on the remaining ones in the list
+                                        int index = rng.Next(0, ListPaintingsPortrait.Count);
+                                        materials[i] = ListPaintingsPortrait[index];
                                         PortraitChangedCount++;  // Increment the count of paintings changed 
-                                        logger.LogToFileOnly("DEBUG", $"painting used random number | {number,-13} | to change portrait painting");
+                                        logger.LogToFileOnly("DEBUG", $"painting used random index number | {index,-13} | to change portrait painting");
+
+                                        ListPaintingsPortrait.RemoveAt(index);
+                                        ListUsedPaintingsPortrait.Add(index);
                                     }
 
                                 }
@@ -234,7 +306,7 @@ namespace CustomPaintings
                 logger.LogInfo($"Total materials checked: {materialsChecked}");
 
                 // Log how many paintings were changed in this scene
-                logger.LogInfo($"Total paintings changed in this scene: {LandscapeChangedCount + SquareChangedCount + PortraitChangedCount}");
+                logger.LogInfo($"Total paintings changed in this scene: {LandscapeChangedCount + SquareChangedCount + PortraitChangedCount}\n" + $"Landscape: {LandscapeChangedCount}\n" + $"Square: {SquareChangedCount}\n" + $"Portrait: {PortraitChangedCount}");
             }
         }
 

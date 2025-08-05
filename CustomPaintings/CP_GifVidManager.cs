@@ -11,11 +11,11 @@ namespace CustomPaintings
     public class CP_GifVidManager
     {
         private readonly CP_Logger logger;
-        private string exePath;
         public CP_GifVidManager(CP_Logger logger)
         {
             this.logger = logger;
-            logger.LogInfo("CP_GifManager initialized.");
+            logger.LogInfo("CP_GifVidManager initialized.");
         }
+
     }
 }
