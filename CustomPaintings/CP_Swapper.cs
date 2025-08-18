@@ -199,13 +199,14 @@ namespace CustomPaintings
 
                                         // Use the seed based random number generator to choose the next image based on the remaining ones in the list
                                         int index = rng.Next(0, ListPaintingsAll.Count);
-                                        
+                                        ListUsedPaintingsAll.Add(index);
+
                                         materials[i] = ListPaintingsAll[index];
                                         paintingsChangedCount++;  // Increment the count of paintings changed                               
                                         logger.LogToFileOnly("DEBUG", $"painting used random index number | {index, -13} | to change a painting");
 
                                         ListPaintingsAll.RemoveAt(index);
-                                        ListUsedPaintingsAll.Add(index);
+                                        
                                     }
                                 }
                             }

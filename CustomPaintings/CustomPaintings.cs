@@ -75,7 +75,7 @@ namespace CustomPaintings
             {
                 sync.SyncRequest();
             }
-            if (!PreviousHostControlValue && CP_Config.HostControl.Value && swapper.GetModState() == CP_Swapper.ModState.Client)
+            if (!PreviousHostControlValue && CP_Config.HostControl.Value && PhotonNetwork.InRoom /*&& swapper.GetModState() == CP_Swapper.ModState.Client */)
             {
                 sync.SyncRequest();
 
@@ -182,23 +182,26 @@ namespace CustomPaintings
         {
             private static void Postfix()
             {
-                Task.Run(async () =>
+                if (CP_Config.HostControl.Value == true)
                 {
-                    if (swapper.GetModState() == CP_Swapper.ModState.Client)
+                    Task.Run(async () =>
                     {
-                        int waited = 0;
-                        int interval = 50;
-
-                        // wait to receive a code
-                        while (swapper.SyncedToHost == false && waited < maxWaitTimeMs)
+                        if (swapper.GetModState() == CP_Swapper.ModState.Client)
                         {
-                            await Task.Delay(interval);
-                            waited += interval;
+                            int waited = 0;
+                            int interval = 50;
+
+                            // wait to receive a code
+                            while (swapper.SyncedToHost == false && waited < maxWaitTimeMs)
+                            {
+                                await Task.Delay(interval);
+                                waited += interval;
+                            }
+                            if (swapper.SyncedToHost == false)
+                                logger.LogError("failed to sync to the host");
                         }
-                        if (swapper.SyncedToHost == false)
-                            logger.LogError("failed to sync to the host");
-                    }
-                });
+                    });
+                }
             }
 
             private static void Prefix()
@@ -207,7 +210,9 @@ namespace CustomPaintings
                 if (swapper.GetModState() != CP_Swapper.ModState.Host)
                 {
                     swapper.SetState(CP_Swapper.ModState.Client);
-                    sync.SyncRequest();
+
+                    if (CP_Config.HostControl.Value == true)
+                        sync.SyncRequestOnJoin();
                 }
             }
         }
