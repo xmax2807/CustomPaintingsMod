@@ -103,12 +103,12 @@ namespace CustomPaintings
         [HarmonyPatch(typeof(PlayerAvatar), "LoadingLevelAnimationCompletedRPC")]
         public class PaintingSwapPatch
         {
-            
             private static void Postfix()
-            {                
-                Task.Run(async () =>
+            {
+                ThreadingHelper.Instance.StartAsyncInvoke(
+                () =>
                 {
-                    if (swapper.GetModState() == CP_Swapper.ModState.Client || swapper.GetModState() == CP_Swapper.ModState.Host)
+                    if (swapper.GetModState() == ModState.Client || swapper.GetModState() == ModState.Host)
                     {
                         int waited = 0;
                         int interval = 50;
@@ -116,7 +116,7 @@ namespace CustomPaintings
                         // wait to receive a code
                         while (!receivedSeed.HasValue && waited < maxWaitTimeMs)
                         {
-                            await Task.Delay(interval);
+                            System.Threading.Thread.Sleep(interval);
                             waited += interval;
                         }
 
@@ -133,26 +133,19 @@ namespace CustomPaintings
                         }
                     }
                     
-
-                    swapper.ReplacePaintings();
+                    return swapper.ReplacePaintings;
                 });
-
-
-
-
             }   
             
             private static void Prefix()
             {
 
-                if (swapper.GetModState() == CP_Swapper.ModState.Client)
+                if (swapper.GetModState() == ModState.Client)
                 {
                     PhotonNetwork.AddCallbackTarget(sync); // Subscribe to Photon events
                 }
 
-
-
-                if (swapper.GetModState() == CP_Swapper.ModState.Host)
+                if (swapper.GetModState() == ModState.Host)
                 {
                     HostSeed = UnityEngine.Random.Range(0, int.MaxValue);
                     logger.LogInfo($"Generated Hostseed: {HostSeed}");
@@ -186,7 +179,7 @@ namespace CustomPaintings
                 {
                     Task.Run(async () =>
                     {
-                        if (swapper.GetModState() == CP_Swapper.ModState.Client)
+                        if (swapper.GetModState() == ModState.Client)
                         {
                             int waited = 0;
                             int interval = 50;
@@ -207,9 +200,9 @@ namespace CustomPaintings
             private static void Prefix()
             {
 
-                if (swapper.GetModState() != CP_Swapper.ModState.Host)
+                if (swapper.GetModState() != ModState.Host)
                 {
-                    swapper.SetState(CP_Swapper.ModState.Client);
+                    swapper.SetState(ModState.Client);
 
                     if (CP_Config.HostControl.Value == true)
                         sync.SyncRequestOnJoin();
@@ -223,7 +216,7 @@ namespace CustomPaintings
         {
             private static bool Prefix()
             {
-                swapper.SetState(CP_Swapper.ModState.Host);
+                swapper.SetState(ModState.Host);
                 return true; // Continue execution of the original method
             }
         }
@@ -238,7 +231,7 @@ namespace CustomPaintings
             {
                 PhotonNetwork.RemoveCallbackTarget(sync); // Unsubscribe to Photon events
 
-                swapper.SetState(CP_Swapper.ModState.SinglePlayer);
+                swapper.SetState(ModState.SinglePlayer);
                 swapper.ResetTempLists();
                 SeperateState = "Singleplayer";
                 swapper.SyncedToHost = false;
