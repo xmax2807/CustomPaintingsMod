@@ -40,4 +40,24 @@
 		<PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all"/>
 	</ItemGroup>
 
+	<!-- Local DLL References -->
+	<ItemGroup>
+		<!-- MetadataExtractor DLL (netstandard2.1) - will be copied to output -->
+		<Reference Include="MetadataExtractor">
+			<HintPath>lib\MetadataExtractor.dll</HintPath>
+			<Private>true</Private>
+		</Reference>
+
+		<!-- MetadataExtractor dependency - System.Text.Encoding.CodePages -->
+		<Reference Include="System.Text.Encoding.CodePages">
+			<HintPath>lib\System.Text.Encoding.CodePages.dll</HintPath>
+			<Private>true</Private>
+		</Reference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="materialNames.txt" CopyToPluginOutputDirectory="PreserveNewest" />
+		<None Include="..\necessary_mod_files\GrungeAssets" CopyToPluginOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+
 </Project>

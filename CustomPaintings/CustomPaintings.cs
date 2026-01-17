@@ -6,6 +6,7 @@ using Photon.Pun;
 using System.Threading.Tasks;
 using BepInEx.Configuration;
 using System;
+using System.IO;
 
 
 
@@ -24,6 +25,7 @@ namespace CustomPaintings
         private static CP_Config configfile;
         private static CP_GifVidManager GifVidManager;
         private static CustomPaintings CP_Main;
+        private static CP_LoaderV2 m_loaderV2;
 
         public static int? receivedSeed = null;
         public static int? oldreceivedSeed = null;
@@ -35,7 +37,6 @@ namespace CustomPaintings
         // This will be the entry point when the mod is loaded
         private void Awake()
         {
-
             // Initialize Logger first
             logger = new CP_Logger("CustomPaintings");
             logger.LogInfo("CustomPaintings mod initialized.");
@@ -50,11 +51,15 @@ namespace CustomPaintings
             loader = new CP_Loader(logger, GifVidManager);
             loader.LoadImagesFromAllPlugins();
 
+            m_loaderV2 = new CP_LoaderV2(logger, new MaterialPropertyBlock());
+            m_loaderV2.LoadAllImagePaths(Paths.PluginPath);
+
             // Initialize grouper , pass logger as dependency
             configfile = new CP_Config();
 
             // Initialize grouper , pass logger as dependency
-            grouper = new CP_GroupList(logger);
+
+            grouper = new CP_GroupList(logger,PaintingDataReader.Read(Path.Combine(Directory.GetParent(Info.Location).FullName, "materialNames.txt")));
 
             // Initialize Swapper last, pass loader as dependency
             swapper = new CP_Swapper(logger, loader, grouper);
@@ -62,7 +67,17 @@ namespace CustomPaintings
             // Initialize syncer
             sync = new CP_Synchroniser(logger, swapper);
                         
-            harmony.PatchAll();
+            harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
+        }
+
+        private void OnEnable()
+        {
+            CP_Config.HostControl.SettingChanged += OnHostControlChanged;
+        }
+
+        private void OnDisable()
+        {
+            CP_Config.HostControl.SettingChanged -= OnHostControlChanged;
         }
 
         public void Update()
@@ -75,9 +90,13 @@ namespace CustomPaintings
             {
                 sync.SyncRequest();
             }
-            if (!PreviousHostControlValue && CP_Config.HostControl.Value && PhotonNetwork.InRoom /*&& swapper.GetModState() == CP_Swapper.ModState.Client */)
+        }
+
+        private void OnHostControlChanged(object sender, EventArgs e)
+        {
+            if (PhotonNetwork.InRoom)
             {
-                sync.SyncRequest();
+                sync.SyncRequestOnJoin();
 
                 Task.Run(async () =>
                 {
@@ -94,9 +113,6 @@ namespace CustomPaintings
                         logger.LogError("failed to sync to the host");
                 });
             }
-            PreviousHostControlValue = CP_Config.HostControl.Value;
-
-
         }
 
         // Patch method for replacing the paintings
@@ -104,11 +120,10 @@ namespace CustomPaintings
         public class PaintingSwapPatch
         {
             private static void Postfix()
-            {
-                ThreadingHelper.Instance.StartAsyncInvoke(
-                () =>
+            {                
+                Task.Run(async () =>
                 {
-                    if (swapper.GetModState() == ModState.Client || swapper.GetModState() == ModState.Host)
+                    if (swapper.GetModState() == CP_Swapper.ModState.Client || swapper.GetModState() == CP_Swapper.ModState.Host)
                     {
                         int waited = 0;
                         int interval = 50;
@@ -116,7 +131,7 @@ namespace CustomPaintings
                         // wait to receive a code
                         while (!receivedSeed.HasValue && waited < maxWaitTimeMs)
                         {
-                            System.Threading.Thread.Sleep(interval);
+                            await Task.Delay(interval);
                             waited += interval;
                         }
 
@@ -133,7 +148,8 @@ namespace CustomPaintings
                         }
                     }
                     
-                    return swapper.ReplacePaintings;
+
+                    swapper.ReplacePaintings();
                 });
             }   
             

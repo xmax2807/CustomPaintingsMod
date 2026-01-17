@@ -1,14 +1,8 @@
 ﻿using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.SceneManagement;
-using HarmonyLib;
 using Photon.Pun;
 using ExitGames.Client.Photon;
 using Photon.Realtime;
-using CustomPaintings;
 using static CustomPaintings.CP_Swapper;
-using System.Net;
-using System.Security.Cryptography;
 
 namespace CustomPaintings
 {
