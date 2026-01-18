@@ -48,9 +48,27 @@
 			<Private>true</Private>
 		</Reference>
 
+		<!-- MetadataExtractor dependency - XmpCore -->
+		<Reference Include="XmpCore">
+			<HintPath>lib\XmpCore.dll</HintPath>
+			<Private>true</Private>
+		</Reference>
+
 		<!-- MetadataExtractor dependency - System.Text.Encoding.CodePages -->
 		<Reference Include="System.Text.Encoding.CodePages">
 			<HintPath>lib\System.Text.Encoding.CodePages.dll</HintPath>
+			<Private>true</Private>
+		</Reference>
+
+		<!-- System.Text.Encoding.CodePages dependency - System.Memory -->
+		<Reference Include="System.Memory">
+			<HintPath>lib\System.Memory.dll</HintPath>
+			<Private>true</Private>
+		</Reference>
+
+		<!-- System.Memory dependency - System.Runtime.CompilerServices.Unsafe -->
+		<Reference Include="System.Runtime.CompilerServices.Unsafe">
+			<HintPath>lib\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
 			<Private>true</Private>
 		</Reference>
 	</ItemGroup>

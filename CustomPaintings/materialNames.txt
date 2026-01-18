@@ -7,6 +7,7 @@ Painting_Board, Landscape, Normal, RugsAndBanners, Chaos
 Painting Danish Flag, Landscape, Normal, RugsAndBanners, Chaos
 Painting Board, Landscape, Normal, RugsAndBanners, Chaos
 Shop Outside Billboard Ad, Landscape, Normal, RugsAndBanners, Chaos
+Painting, Portrait, Normal, RugsAndBanners, Chaos
 Museum Sign, Landscape, Normal, RugsAndBanners, Chaos
 Museum Painting H 01, Landscape, Normal, RugsAndBanners, Chaos
 Museum Painting H 02, Landscape, Normal, RugsAndBanners, Chaos

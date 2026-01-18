@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using BepInEx.Configuration;
 using System;
 using System.IO;
+using System.Collections;
 
 
 
@@ -49,10 +50,9 @@ namespace CustomPaintings
 
             // Initialize Loader second
             loader = new CP_Loader(logger, GifVidManager);
-            loader.LoadImagesFromAllPlugins();
+            // loader.LoadImagesFromAllPlugins();
 
-            m_loaderV2 = new CP_LoaderV2(logger, new MaterialPropertyBlock());
-            m_loaderV2.LoadAllImagePaths(Paths.PluginPath);
+            m_loaderV2 = new CP_LoaderV2(logger, new MaterialPropertyBlock(), Paths.PluginPath, RunCoroutine);
 
             // Initialize grouper , pass logger as dependency
             configfile = new CP_Config();
@@ -62,12 +62,26 @@ namespace CustomPaintings
             grouper = new CP_GroupList(logger,PaintingDataReader.Read(Path.Combine(Directory.GetParent(Info.Location).FullName, "materialNames.txt")));
 
             // Initialize Swapper last, pass loader as dependency
-            swapper = new CP_Swapper(logger, loader, grouper);
+            swapper = new CP_Swapper(logger, loader, grouper, m_loaderV2);
 
             // Initialize syncer
             sync = new CP_Synchroniser(logger, swapper);
                         
             harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
+        }
+
+        private void RunCoroutine(Func<IEnumerator> func)
+        {
+            // StartCoroutine(m_loaderV2.UpdateRenderers());
+            StartCoroutine(Test());
+        }
+
+        private IEnumerator Test()
+        {
+            while (m_loaderV2.UpdateRenderers())
+            {
+                yield return null;
+            }
         }
 
         private void OnEnable()
@@ -77,6 +91,7 @@ namespace CustomPaintings
 
         private void OnDisable()
         {
+            logger.LogInfo("CustomPaintings mod disabled.");
             CP_Config.HostControl.SettingChanged -= OnHostControlChanged;
         }
 
@@ -148,7 +163,6 @@ namespace CustomPaintings
                         }
                     }
                     
-
                     swapper.ReplacePaintings();
                 });
             }   
