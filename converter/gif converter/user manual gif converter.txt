@@ -1,4 +1,10 @@
 to use a converter
+- make sure imagemagick is installed, 
+	- here is a video on how to install https://www.youtube.com/watch?v=UcmfgVOuAFw
+	- add imagemagick to your PATH 
+		- this video uses python but it works the same. https://youtu.be/AOQX6LZUaGo?t=354
+		- you should be able to use the whole folder structure and not just the executable 
+
 - make a converter folder in any folder you'd like to add a CustomPaintings folder to (to be able to send profile codes, the config folder is recommended)
 - download ffmpeg:
 	- go to https://www.gyan.dev/ffmpeg/builds/#release-builds
