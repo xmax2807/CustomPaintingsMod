@@ -7,8 +7,10 @@ using MetadataExtractor;
 using MetadataExtractor.Formats.FileType;
 using MetadataExtractor.Formats.Jpeg;
 using MetadataExtractor.Formats.Png;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.Rendering;
 
 namespace CustomPaintings
 {
@@ -21,6 +23,9 @@ namespace CustomPaintings
         readonly List<Request> m_requests = new();
         readonly Action<Func<IEnumerator>> m_coroutineRunner;
         readonly Dictionary<string, Texture2D> m_cache = new();
+        readonly Dictionary<string, GPUTextureReadRequest> m_GPUTextureReqs = new();
+
+        private bool m_skipForNextFrame;
 
         public CP_LoaderV2(CP_Logger logger, MaterialPropertyBlock propertyBlock, string rootPath, Action<Func<IEnumerator>> coroutineRunner)
         {
@@ -120,7 +125,7 @@ namespace CustomPaintings
             else
             {
                 string localPath = $"file://{fullPath}";
-                var req = UnityWebRequestTexture.GetTexture(localPath);
+                var req = UnityWebRequestTexture.GetTexture(localPath, nonReadable: true);
                 req.timeout = 15;
                 m_requests.Add(new Request(req.SendWebRequest(), renderer, matIndex));
             }
@@ -140,10 +145,21 @@ namespace CustomPaintings
             }
             m_cache.Clear();
             m_requests.Clear();
+
+            foreach(var gpuReq in m_GPUTextureReqs.Values)
+            {
+                gpuReq.Dispose();
+            }
+            m_GPUTextureReqs.Clear();
         }
 
         public bool UpdateRenderers()
         {
+            if (m_skipForNextFrame)
+            {
+                m_skipForNextFrame = false;
+                return true;
+            }
             if( m_requests.Count == 0) return false;
             int lastIndex = m_requests.Count - 1;
 
@@ -161,18 +177,36 @@ namespace CustomPaintings
 
                 if (opt.webRequest.result == UnityWebRequest.Result.Success)
                 {
-                    m_logger.LogInfo($"Loaded {opt.webRequest.uri.LocalPath}");
-                    Texture2D texture;
-                    if (!m_cache.ContainsKey(opt.webRequest.uri.LocalPath))
-                    {                    
-                        texture = DownloadHandlerTexture.GetContent(opt.webRequest);
-                        m_cache.Add(opt.webRequest.uri.LocalPath, texture);
-                    }
-                    else
+                    // m_logger.LogInfo($"Loaded {opt.webRequest.uri.LocalPath}");
+                    string localPath = opt.webRequest.uri.LocalPath;
+                    bool hasTexture = m_cache.TryGetValue(localPath, out Texture2D texture);
+                    if (!hasTexture)
                     {
-                        texture = m_cache[opt.webRequest.uri.LocalPath];
+                        if(!m_GPUTextureReqs.TryGetValue(localPath, out GPUTextureReadRequest gpuReq))
+                        {
+                            gpuReq = ProcessTexture(DownloadHandlerTexture.GetContent(opt.webRequest));
+                            m_GPUTextureReqs.Add(localPath, gpuReq);
+                            continue;
+                        }
+                        if(!gpuReq.IsDone) continue;
+                        if(gpuReq.TryGetResult(out texture))
+                        {
+                            m_cache.Add(localPath, texture);
+                            m_GPUTextureReqs.Remove(localPath);
+                            m_skipForNextFrame = true;
+                            break;
+                        }
+                        else
+                        {
+                            m_logger.LogError($"Failed to load {opt.webRequest.uri.LocalPath}: {gpuReq.GetInfo()}");
+                        }
+                        gpuReq.Dispose();
                     }
-                    ApplyToRenderer(renderer, matIndex, texture);
+
+                    if (hasTexture)
+                    {
+                        ApplyToRenderer(renderer, matIndex, texture);
+                    }
                 }
                 else
                 {
@@ -199,6 +233,20 @@ namespace CustomPaintings
             renderer.GetPropertyBlock(m_propertyBlock, matIndex);
             m_propertyBlock.SetTexture("_MainTex", texture);
             renderer.SetPropertyBlock(m_propertyBlock, matIndex);
+        }
+
+        private GPUTextureReadRequest ProcessTexture(in Texture2D source)
+        {
+            const int maxSide = 1024;
+            float scale = 1f;
+            if (source.width > maxSide || source.height > maxSide)
+            {
+                scale = maxSide / (float)Mathf.Max(source.width, source.height);
+            }
+
+            int targetWidth = (int)(source.width * scale) & ~3;
+            int targetHeight = (int)(source.height * scale) & ~3;
+            return new GPUTextureReadRequest(source, targetWidth, targetHeight);
         }
 
         internal void RetrieveImagePaths(ShapeType shape, int startIndex, int size, in List<string> paths)
@@ -236,6 +284,73 @@ namespace CustomPaintings
                 this.opt = opt;
                 this.renderer = renderer;
                 this.matIndex = matIndex;
+            }
+        }
+
+        private class GPUTextureReadRequest
+        {
+            private readonly int m_width, m_height;
+            private readonly RenderTexture m_renderTexture;
+            private readonly Texture2D m_texture;
+            public bool IsDone {get; private set;} = false;
+            private bool m_hasError;
+            private NativeArray<byte> m_rawData;
+
+            public GPUTextureReadRequest(Texture2D source, int targetWidth, int targetHeight)
+            {
+                m_width = targetWidth;
+                m_height = targetHeight;
+                m_texture = source != null ? source : throw new ArgumentNullException(nameof(source));
+                m_renderTexture = RenderTexture.GetTemporary(
+                                                targetWidth,
+                                                targetHeight,
+                                                depthBuffer: 0, 
+                                                RenderTextureFormat.ARGB32);
+                Graphics.Blit(source, m_renderTexture);
+                m_rawData = new NativeArray<byte>(targetWidth * targetHeight * 4, Allocator.Persistent);
+                AsyncGPUReadback.RequestIntoNativeArray(ref m_rawData, m_renderTexture, callback: OnCompleted);
+            }
+
+            private void OnCompleted(AsyncGPUReadbackRequest request)
+            {
+                m_hasError = request.hasError;
+                IsDone = true;
+            }
+
+            public bool TryGetResult(out Texture2D texture)
+            {
+                if(IsDone)
+                {
+                    texture = new Texture2D(m_width, m_height, TextureFormat.RGBA32, false);
+                    texture.LoadRawTextureData(m_rawData);
+                    texture.Compress(highQuality: false);
+                    texture.Apply(updateMipmaps: false, makeNoLongerReadable: true);
+                    return true;
+                }
+
+                texture = null;
+                return false;
+            }
+
+
+            public void Dispose()
+            {
+                if(m_renderTexture != null && m_renderTexture.IsCreated())
+                {
+                    RenderTexture.ReleaseTemporary(m_renderTexture);
+                }
+
+                if(m_texture != null)
+                {
+                    GameObject.Destroy(m_texture);
+                }
+
+                m_rawData.Dispose();
+            }
+
+            public string GetInfo()
+            {
+                return $"{m_width}x{m_height}. HasError: {m_hasError}, IsDone: {IsDone}, renderTexture: {m_renderTexture}, texture: {m_texture}";
             }
         }
     }

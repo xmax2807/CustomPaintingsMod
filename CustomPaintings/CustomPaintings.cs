@@ -105,10 +105,8 @@ namespace CustomPaintings
 
                 if (_isUpdatingRenderers)
                 {
-                    logger.LogInfo("Updating renderers");
                     if (!m_loaderV2.UpdateRenderers())
                     {
-                        logger.LogInfo("Done updating renderers");
                         _isUpdatingRenderers = false;
                     }
                 }
