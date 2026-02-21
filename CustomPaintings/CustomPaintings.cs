@@ -9,15 +9,11 @@ using System;
 using System.IO;
 using System.Collections;
 
-
-
-
 namespace CustomPaintings
 {
     [BepInPlugin("UnderratedJunk.CustomPaintings", "CustomPaintings", "1.2.0")]
     public class CustomPaintings : BaseUnityPlugin
     {
-        // create instances for the different class files
         private static CP_Logger logger;
         private static CP_Loader loader;
         private static CP_Swapper swapper;
@@ -30,81 +26,44 @@ namespace CustomPaintings
 
         public static int? receivedSeed = null;
         public static int? oldreceivedSeed = null;
-        public static readonly int maxWaitTimeMs = 1000; // Max wait time for seed
+        public static readonly int maxWaitTimeMs = 1000;
         private bool PreviousHostControlValue = false;
+
+        private static bool _isUpdatingRenderers = false;
 
         private readonly Harmony harmony = new Harmony("UnderratedJunk.CustomPaintings");
 
-        // This will be the entry point when the mod is loaded
         private void Awake()
         {
-            // Initialize Logger first
             logger = new CP_Logger("CustomPaintings");
             logger.LogInfo("CustomPaintings mod initialized.");
 
-            // Initialize GifVidManager
             GifVidManager = new CP_GifVidManager(logger);
 
-            // Initialize configurable settings
             CP_Config.Init(Config);
 
-            // Initialize Loader second
             loader = new CP_Loader(logger, GifVidManager);
-            // loader.LoadImagesFromAllPlugins();
 
             m_loaderV2 = new CP_LoaderV2(logger, new MaterialPropertyBlock(), Paths.PluginPath, RunCoroutine);
 
-            // Initialize grouper , pass logger as dependency
             configfile = new CP_Config();
 
-            // Initialize grouper , pass logger as dependency
+            grouper = new CP_GroupList(logger, PaintingDataReader.Read(Path.Combine(Directory.GetParent(Info.Location).FullName, "materialNames.txt")));
 
-            grouper = new CP_GroupList(logger,PaintingDataReader.Read(Path.Combine(Directory.GetParent(Info.Location).FullName, "materialNames.txt")));
-
-            // Initialize Swapper last, pass loader as dependency
             swapper = new CP_Swapper(logger, loader, grouper, m_loaderV2);
 
-            // Initialize syncer
             sync = new CP_Synchroniser(logger, swapper);
-                        
+
+            // Subscribe config event here since OnEnable may never fire
+            CP_Config.HostControl.SettingChanged += OnHostControlChanged;
+
             harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
         }
 
-        private void RunCoroutine(Func<IEnumerator> func)
+        private static void RunCoroutine(Func<IEnumerator> func)
         {
-            // StartCoroutine(m_loaderV2.UpdateRenderers());
-            StartCoroutine(Test());
-        }
-
-        private IEnumerator Test()
-        {
-            while (m_loaderV2.UpdateRenderers())
-            {
-                yield return null;
-            }
-        }
-
-        private void OnEnable()
-        {
-            CP_Config.HostControl.SettingChanged += OnHostControlChanged;
-        }
-
-        private void OnDisable()
-        {
-            logger.LogInfo("CustomPaintings mod disabled.");
-            CP_Config.HostControl.SettingChanged -= OnHostControlChanged;
-        }
-
-        public void Update()
-        {
-            if (Input.GetKeyDown(configfile.ForceSwapKey))
-            {
-                swapper.ReplacePaintings();
-            }
-            if (Input.GetKeyDown(configfile.SyncRequestKey))
-            {
-                sync.SyncRequest();
-            }
+            // Instead of StartCoroutine, set flag for the Harmony Update patch to tick
+            _isUpdatingRenderers = true;
         }
 
         private void OnHostControlChanged(object sender, EventArgs e)
@@ -118,7 +77,6 @@ namespace CustomPaintings
                     int waited = 0;
                     int interval = 50;
 
-                    // wait to receive a code
                     while (swapper.SyncedToHost == false && waited < maxWaitTimeMs)
                     {
                         await Task.Delay(interval);
@@ -130,12 +88,38 @@ namespace CustomPaintings
             }
         }
 
-        // Patch method for replacing the paintings
+        [HarmonyPatch(typeof(GameDirector), "Update")]
+        public class GameUpdatePatch
+        {
+            private static void Postfix()
+            {
+                // Replaces the old Update() hotkey checks
+                if (Input.GetKeyDown(configfile.ForceSwapKey))
+                {
+                    swapper.ReplacePaintings();
+                }
+                if (Input.GetKeyDown(configfile.SyncRequestKey))
+                {
+                    sync.SyncRequest();
+                }
+
+                if (_isUpdatingRenderers)
+                {
+                    logger.LogInfo("Updating renderers");
+                    if (!m_loaderV2.UpdateRenderers())
+                    {
+                        logger.LogInfo("Done updating renderers");
+                        _isUpdatingRenderers = false;
+                    }
+                }
+            }
+        }
+
         [HarmonyPatch(typeof(PlayerAvatar), "LoadingLevelAnimationCompletedRPC")]
         public class PaintingSwapPatch
         {
             private static void Postfix()
-            {                
+            {
                 Task.Run(async () =>
                 {
                     if (swapper.GetModState() == CP_Swapper.ModState.Client || swapper.GetModState() == CP_Swapper.ModState.Host)
@@ -143,7 +127,6 @@ namespace CustomPaintings
                         int waited = 0;
                         int interval = 50;
 
-                        // wait to receive a code
                         while (!receivedSeed.HasValue && waited < maxWaitTimeMs)
                         {
                             await Task.Delay(interval);
@@ -155,31 +138,30 @@ namespace CustomPaintings
                             logger.LogInfo($"[Postfix] Client using received seed: {receivedSeed.Value}");
                             oldreceivedSeed = ReceivedSeed;
                             ReceivedSeed = receivedSeed.Value;
-                            receivedSeed = null; //reset receivedseed for while loop above to work correctly
+                            receivedSeed = null;
                         }
                         else if (ReceivedSeed == oldreceivedSeed)
                         {
                             logger.LogWarning("[Postfix] Client did not receive seed in time. Proceeding without it.");
                         }
                     }
-                    
+
                     swapper.ReplacePaintings();
                 });
-            }   
-            
+            }
+
             private static void Prefix()
             {
-
                 if (swapper.GetModState() == ModState.Client)
                 {
-                    PhotonNetwork.AddCallbackTarget(sync); // Subscribe to Photon events
+                    PhotonNetwork.AddCallbackTarget(sync);
                 }
 
                 if (swapper.GetModState() == ModState.Host)
                 {
                     HostSeed = UnityEngine.Random.Range(0, int.MaxValue);
                     logger.LogInfo($"Generated Hostseed: {HostSeed}");
-                    PhotonNetwork.AddCallbackTarget(sync); // Subscribe to Photon events
+                    PhotonNetwork.AddCallbackTarget(sync);
 
                     sync.SendSeed(HostSeed);
 
@@ -187,19 +169,16 @@ namespace CustomPaintings
                     {
                         sync.SendHostSettings("on", CP_Config.RugsAndBanners.Value, CP_Config.ChaosMode.Value);
                     }
-
                     else if (CP_Config.SeperateImages.Value == false)
                     {
                         sync.SendHostSettings("off", CP_Config.RugsAndBanners.Value, CP_Config.ChaosMode.Value);
                     }
                 }
 
-                // Update 
                 loader.UpdateGrungeMaterialParameters();
             }
         }
 
-        // JoinLobby Patch change to client state
         [HarmonyPatch(typeof(NetworkConnect), "TryJoiningRoom")]
         public class JoinLobbyPatch
         {
@@ -214,7 +193,6 @@ namespace CustomPaintings
                             int waited = 0;
                             int interval = 50;
 
-                            // wait to receive a code
                             while (swapper.SyncedToHost == false && waited < maxWaitTimeMs)
                             {
                                 await Task.Delay(interval);
@@ -229,7 +207,6 @@ namespace CustomPaintings
 
             private static void Prefix()
             {
-
                 if (swapper.GetModState() != ModState.Host)
                 {
                     swapper.SetState(ModState.Client);
@@ -240,26 +217,22 @@ namespace CustomPaintings
             }
         }
 
-        // HostLobby Patch change to host state
         [HarmonyPatch(typeof(SteamManager), "HostLobby")]
         public class HostLobbyPatch
         {
             private static bool Prefix()
             {
                 swapper.SetState(ModState.Host);
-                return true; // Continue execution of the original method
+                return true;
             }
         }
 
-
-
-        // change state to singleplayer when leaving multiplayer lobby
         [HarmonyPatch(typeof(SteamManager), "LeaveLobby")]
         public class LeaveLobbyPatch
         {
             private static void Postfix()
             {
-                PhotonNetwork.RemoveCallbackTarget(sync); // Unsubscribe to Photon events
+                PhotonNetwork.RemoveCallbackTarget(sync);
 
                 swapper.SetState(ModState.SinglePlayer);
                 swapper.ResetTempLists();
