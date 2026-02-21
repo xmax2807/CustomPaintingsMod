@@ -1,4 +1,16 @@
 to use a converter
+PREREQUISITES:
+- make sure imagemagick is installed, 
+  - on windows if you go to settings->apps->installed apps, and search for imagemagic. (not sure if it shows up for standalone version)
+  - if imagemagick shows up it is installed, else follow install steps below
+
+    IMAGEMAGICK INSTALL:
+  	- here is a video on how to install https://www.youtube.com/watch?v=UcmfgVOuAFw
+  	- add imagemagick to your PATH 
+  		- this video uses python but it works the same. https://youtu.be/AOQX6LZUaGo?t=354
+  		- you should be able to use the whole folder structure and not just the executable 
+
+USE:
 - make a converter folder in any folder you'd like to add a CustomPaintings folder to (to be able to send profile codes, the config folder is recommended)
 - create a folder called ImagesToConvert in the converter folder
 - put all images you want to convert in this folder
