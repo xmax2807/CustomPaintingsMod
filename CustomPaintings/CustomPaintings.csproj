@@ -48,6 +48,14 @@
 			<Private>true</Private>
 		</Reference>
 
+		<Reference Include="UniTask">
+			<HintPath>lib\UniTask.dll</HintPath>
+		</Reference>
+
+		<Reference Include="UniTask.Linq">
+			<HintPath>lib\UniTask.Linq.dll</HintPath>
+		</Reference>
+
 		<!-- MetadataExtractor dependency - XmpCore -->
 		<Reference Include="XmpCore">
 			<HintPath>lib\XmpCore.dll</HintPath>

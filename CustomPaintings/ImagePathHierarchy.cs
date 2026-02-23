@@ -52,7 +52,7 @@ namespace CustomPaintings
                 }
                 else
                 {
-                    sb.Append(RootPath).Append('\\');
+                    sb.Append(RootPath).Append(Path.DirectorySeparatorChar);
                     package.BuildFilteredPaths(orientation, ref skip, ref take, result, sb);
                     sb.Clear();
                 }
@@ -126,7 +126,7 @@ namespace CustomPaintings
             {
                 if (take <= 0) return;
 
-                sb.Append(Path.Combine(m_root.Value, k_customPaintingsFolderName)).Append('\\');
+                sb.Append(Path.Combine(m_root.Value, k_customPaintingsFolderName)).Append(Path.DirectorySeparatorChar);
                 int lengthBefore = sb.Length;
                 for(int i = 0; take > 0 && i < m_root.ChildCount; ++i)
                 {
@@ -157,14 +157,14 @@ namespace CustomPaintings
                             --skip;
                         else
                         {
-                            result.Add(sb.ToString());
+                            result.Add(CP_AssetImageCacheHelper.GetFileCache(sb.ToString()));
                             --take;
                         }
                     }
                 }
                 else if (node.HasChildren)
                 {
-                    sb.Append('\\');
+                    sb.Append(Path.DirectorySeparatorChar);
                     for (int i = 0; take > 0 && i < node.ChildCount; ++i)
                     {
                         BuildFilteredPathsRecursive(node[i], orientation, ref skip, ref take, result, sb);

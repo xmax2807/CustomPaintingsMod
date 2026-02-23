@@ -37,7 +37,7 @@ namespace CustomPaintings
         }
 
         void LoadAllImagePaths(in ImagePathHierarchy hierarchy)
-        {            
+        {
 
             foreach (string directoryPath in System.IO.Directory.EnumerateDirectories(hierarchy.RootPath))
             {
@@ -75,6 +75,7 @@ namespace CustomPaintings
                     int width = dir.GetInt32(PngDirectory.TagImageWidth);
                     int height = dir.GetInt32(PngDirectory.TagImageHeight);
                     m_logger.LogInfo($"Extracted {width}x{height} from {fileName}");
+                    CP_AssetImageCacheHelper.SaveToCache(imagePath, width, height, hasAlpha: true).Forget();
                     return new ImageFileNode(fileName,width,height);
                 case "jpg":
                 case "jpeg":
@@ -82,6 +83,7 @@ namespace CustomPaintings
                     int jpegWidth = jpegDir.GetImageWidth();
                     int jpegHeight = jpegDir.GetImageHeight();
                     m_logger.LogInfo($"Extracted {jpegWidth}x{jpegHeight} from {fileName}");
+                    CP_AssetImageCacheHelper.SaveToCache(imagePath, jpegWidth, jpegHeight).Forget();
                     return new ImageFileNode(fileName,jpegWidth,jpegHeight);
                 default:
                     return null;
@@ -122,18 +124,30 @@ namespace CustomPaintings
             {
                 ApplyToRenderer(renderer, matIndex, texture);
             }
+            // else
+            // {
+            //     string localPath = $"file://{fullPath}";
+            //     var req = UnityWebRequestTexture.GetTexture(localPath, nonReadable: true);
+            //     req.timeout = 15;
+            //     m_requests.Add(new Request(req.SendWebRequest(), renderer, matIndex));
+            // }
+
+            // if(m_requests.Count > 0)
+            // {
+            //     // m_logger.LogInfo($"Starting UpdateRenderers coroutine.");
+            //     m_coroutineRunner(null);
+            // }
+
             else
             {
-                string localPath = $"file://{fullPath}";
-                var req = UnityWebRequestTexture.GetTexture(localPath, nonReadable: true);
-                req.timeout = 15;
-                m_requests.Add(new Request(req.SendWebRequest(), renderer, matIndex));
-            }
-
-            if(m_requests.Count > 0)
-            {
-                // m_logger.LogInfo($"Starting UpdateRenderers coroutine.");
-                m_coroutineRunner(null);
+                if( CP_AssetImageCacheHelper.TryLoadFromCache(fullPath, out texture))
+                {
+                    ApplyToRenderer(renderer, matIndex, texture);
+                }
+                else
+                {
+                    m_logger.LogInfo($"Failed to load texture: {fullPath}");
+                }
             }
         }
 

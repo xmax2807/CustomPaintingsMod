@@ -21,7 +21,7 @@ namespace CustomPaintings
         {
             if(m_dataSource.TryGetValue(matName, out PaintingData paintingData))
             {
-                m_logger.LogInfo($"HasDisplayMode: {matName} {paintingData.Mode} {displayMode}");
+                // m_logger.LogInfo($"HasDisplayMode: {matName} {paintingData.Mode} {displayMode}");
                 return paintingData.Mode.HasFlag(displayMode);
             }
             return false;

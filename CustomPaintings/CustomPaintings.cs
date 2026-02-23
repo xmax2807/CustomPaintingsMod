@@ -15,6 +15,7 @@ namespace CustomPaintings
     public class CustomPaintings : BaseUnityPlugin
     {
         private static CP_Logger logger;
+        public static CP_Logger CP_Logger => logger;
         private static CP_Loader loader;
         private static CP_Swapper swapper;
         private static CP_Synchroniser sync;
@@ -105,10 +106,8 @@ namespace CustomPaintings
 
                 if (_isUpdatingRenderers)
                 {
-                    if (!m_loaderV2.UpdateRenderers())
-                    {
-                        _isUpdatingRenderers = false;
-                    }
+                    swapper.ReplacePaintings();
+                    _isUpdatingRenderers = false;
                 }
             }
         }
@@ -144,7 +143,8 @@ namespace CustomPaintings
                         }
                     }
 
-                    swapper.ReplacePaintings();
+                    _isUpdatingRenderers = true;
+                    
                 });
             }
 
